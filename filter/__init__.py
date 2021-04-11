@@ -181,7 +181,7 @@ if __name__=="__main__":
             axes[1].set_xscale('log')
             axes[0].set_ylabel('Input', **hfont,fontsize=18);
             axes[1].set_ylabel('Output', **hfont,fontsize=18);
-            axes[1].set_xlabel('Time (s)', **hfont,fontsize=18);
+            axes[1].set_xlabel('Frequency (Hz)', **hfont,fontsize=18);
             #axes[0].set_xlim(0,11/rs)
             #axes[1].set_xlim(0,11/rs)
             axes[0].grid(True)
