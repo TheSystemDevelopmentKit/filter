@@ -1,10 +1,9 @@
 """
 ========
-Inverter
+Filter
 ========
 
-Inverter model template The System Development Kit
-Used as a template for all TheSyDeKick Entities.
+Filter model template The System Development Kit
 
 Current docstring documentation style is Numpy
 https://numpydoc.readthedocs.io/en/latest/format.html
@@ -38,42 +37,17 @@ if not (os.path.abspath('../../thesdk') in sys.path):
     sys.path.append(os.path.abspath('../../thesdk'))
 
 from thesdk import *
-from rtl import *
 from spice import *
 
 import numpy as np
 
-class filter(rtl,spice,thesdk):
+class filter(spice,thesdk):
     @property
     def _classfile(self):
         return os.path.dirname(os.path.realpath(__file__)) + "/"+__name__
 
     def __init__(self,*arg): 
         """ Inverter parameters and attributes
-            Parameters
-            ----------
-                *arg : 
-                If any arguments are defined, the first one should be the parent instance
-
-            Attributes
-            ----------
-            proplist : array_like
-                List of strings containing the names of attributes whose values are to be copied 
-                from the parent
-
-            Rs : float
-                Sampling rate [Hz] of which the input values are assumed to change. Default: 100.0e6
-
-            vdd : float
-                Supply voltage [V] for filter analog simulation. Default 1.0.
-
-            IOS : Bundle
-                Members of this bundle are the IO's of the entity. See documentation of thsdk package.
-                Default members defined as
-
-                self.IOS.Members['A']=IO() # Pointer for input data
-                self.IOS.Members['Z']= IO() # pointer for oputput data
-                self.IOS.Members['control_write']= IO() # Piter for control IO for rtl simulations
 
             model : string
                 Default 'py' for Python. See documentation of thsdk package for more details.
@@ -89,12 +63,11 @@ class filter(rtl,spice,thesdk):
         """
         self.print_log(type='I', msg='Initializing %s' %(__name__)) 
         self.proplist = [ 'Rs' ];    # Properties that can be propagated from parent
-        self.Rs =  100e6;            # Sampling frequency
-        self.vdd = 1.0
+        self.Capval =  1e-12;            # Sampling frequency
+        self.Rval = 1e3
         self.IOS=Bundle()
-        self.IOS.Members['A']=IO() # Pointer for input data
-        self.IOS.Members['Z']= IO()
-        self.IOS.Members['control_write']= IO() 
+        self.IOS.Members['inniputti']=IO() # Pointer for input data
+        self.IOS.Members['outtiputti']= IO()
         # File for control is created in controller
         self.model='py';             # Can be set externally, but is not propagated
         self.par= False              # By default, no parallel processing
@@ -125,12 +98,7 @@ class filter(rtl,spice,thesdk):
         3) Assign local variable to output
 
         '''
-        inval=self.IOS.Members['A'].Data
-        out=np.array(1-inval)
-        if self.par:
-            self.queue.put(out)
-        self.IOS.Members['Z'].Data=out
-
+        pass
     def run(self,*arg):
         ''' The default name of the method to be executed. This means: parameters and attributes 
             control what is executed if run method is executed. By this we aim to avoid the need of 
@@ -149,29 +117,10 @@ class filter(rtl,spice,thesdk):
         if self.model=='py':
             self.main()
         else: 
-          if self.model=='sv':
-              # Verilog simulation options here
-              _=rtl_iofile(self, name='A', dir='in', iotype='sample', ionames=['A'], datatype='sint') # IO file for input A
-              _=rtl_iofile(self, name='Z', dir='out', iotype='sample', ionames=['Z'], datatype='sint')
-              self.rtlparameters=dict([ ('g_Rs',self.Rs),]) #Defines the sample rate
-              self.run_rtl()
-              self.IOS.Members['Z'].Data=self.IOS.Members['Z'].Data.astype(int)
-          if self.model=='vhdl':
-              # VHDL simulation options here
-              _=rtl_iofile(self, name='A', dir='in', iotype='sample', ionames=['A']) # IO file for input A
-              _=rtl_iofile(self, name='Z', dir='out', iotype='sample', ionames=['Z'], datatype='int')
-              self.rtlparameters=dict([ ('g_Rs',self.Rs),]) #Defines the sample rate
-              self.run_rtl()
-              self.IOS.Members['Z'].Data=self.IOS.Members['Z'].Data.astype(int)
-          
-          elif self.model=='eldo' or self.model=='spectre':
-              _=spice_iofile(self, name='A', dir='in', iotype='sample', ionames=['A'], rs=self.Rs, \
-                vhi=self.vdd, trise=1/(self.Rs*4), tfall=1/(self.Rs*4))
-              _=spice_iofile(self, name='Z', dir='out', iotype='event', sourcetype='V', ionames=['Z'])
-
+          if self.model=='spectre':
               # Saving the analog waveform of the input as well
               self.IOS.Members['A_OUT']= IO()
-              _=spice_iofile(self, name='A_OUT', dir='out', iotype='event', sourcetype='V', ionames=['A'])
+              _=spice_iofile(self, name='A_OUT', dir='out', iotype='event', sourcetype='v', datatype='complex', ionames=['inniputti', 'outtiputti'])
               #self.preserve_iofiles = True
               #self.preserve_spicefiles = True
               #self.interactive_spice = True
@@ -180,45 +129,25 @@ class filter(rtl,spice,thesdk):
                           'eps': '1e-6'
                       }
               self.spiceparameters = {
-                          'exampleparam': '0'
+                          'Capval': str(self.Capval),
+                          'rval': str(self.Rval)
                       }
               
-              # Plotting nodes for interactive eldo purposes.
-              # Spectre also supported, but without 'v()' specifiers.
-              # i.e. self.plotlist = ['A','Z']
-              if self.model == 'eldo':
-                  self.plotlist = ['v(A)','v(Z)']
-
-              # Defining library options
-              # Path to model libraries needs to be defined in TheSDK.config as
-              # either ELDOLIBFILE or SPECTRELIBFILE. In this case, no model libraries
-              # will be included (assuming these variables are not defined). The
-              # temperature will be set regardless.
               self.spicecorner = {
                           'corner': 'top_tt',
                           'temp': 27,
                       }
-
+              self.spicemisc.append('Vinniputti inniputti  gnd vsource mag=1') 
               # Example of defining supplies (not used here because the example filter has no supplies)
               #_=spice_dcsource(self,name='dd',value=self.vdd,pos='VDD',neg='VSS',extract=True,ext_start=2e-9)
-              #_=spice_dcsource(self,name='ss',value=0,pos='VSS',neg='0')
+              _=spice_dcsource(self,name='gnd',value=0,pos='gnd',neg='0')
 
               # Simulation command
-              _=spice_simcmd(self,sim='tran')
+              _=spice_simcmd(self,sim='ac')
               self.run_spice()
 
           if self.par:
               self.queue.put(self.IOS.Members[Z].Data)
-
-    def define_io_conditions(self):
-        '''This overloads the method called by run_rtl method. It defines the read/write conditions for the files
-
-        '''
-        # Input A is read to verilog simulation after 'initdone' is set to 1 by controller
-        self.iofile_bundle.Members['A'].verilog_io_condition='initdone'
-        # Output is read to verilog simulation when all of the outputs are valid, 
-        # and after 'initdone' is set to 1 by controller
-        self.iofile_bundle.Members['Z'].verilog_io_condition_append(cond='&& initdone')
 
 
 if __name__=="__main__":
@@ -226,61 +155,40 @@ if __name__=="__main__":
     from  filter import *
     from  filter.controller import controller as filter_controller
     import pdb
-    length=1024
-    rs=100e6
-    indata=np.random.randint(2,size=length).reshape(-1,1);
-    #indata=np.random.randint(2,size=length)
-    controller=filter_controller()
-    controller.Rs=rs
-    #controller.reset()
-    #controller.step_time()
-    controller.start_datafeed()
 
-    models=[ 'py', 'sv', 'vhdl', 'eldo', 'spectre' ]
+    models=[ 'spectre' ]
     duts=[]
     for model in models:
         d=filter()
         duts.append(d) 
         d.model=model
-        d.Rs=rs
         #d.preserve_iofiles=True
+        #d.preserve_spicefiles=True
         #d.interactive_rtl=True
         #d.interactive_spice=True
-        d.IOS.Members['A'].Data=indata
-        d.IOS.Members['control_write']=controller.IOS.Members['control_write']
         d.init()
         d.run()
 
-    # Obs the latencies may be different
-    latency=[ 0 , 1, 1, 0 ]
     for k in range(len(duts)):
         hfont = {'fontname':'Sans'}
         if duts[k].model == 'eldo' or duts[k].model=='spectre':
             figure,axes = plt.subplots(2,1,sharex=True)
-            axes[0].plot(duts[k].IOS.Members['A_OUT'].Data[:,0],duts[k].IOS.Members['A_OUT'].Data[:,1],label='Input')
-            axes[1].plot(duts[k].IOS.Members['Z'].Data[:,0],duts[k].IOS.Members['Z'].Data[:,1],label='Output')
+            axes[0].plot(duts[k].IOS.Members['A_OUT'].Data[:,0].real,
+                    20*np.log10(np.abs(duts[k].IOS.Members['A_OUT'].Data[:,1])),label='Input')
+            axes[1].plot(duts[k].IOS.Members['A_OUT'].Data[:,0].real,
+                    20*np.log10(np.abs(duts[k].IOS.Members['A_OUT'].Data[:,2])),label='Output')
+            axes[0].set_xscale('log')
+            axes[1].set_xscale('log')
             axes[0].set_ylabel('Input', **hfont,fontsize=18);
             axes[1].set_ylabel('Output', **hfont,fontsize=18);
             axes[1].set_xlabel('Time (s)', **hfont,fontsize=18);
-            axes[0].set_xlim(0,11/rs)
-            axes[1].set_xlim(0,11/rs)
+            #axes[0].set_xlim(0,11/rs)
+            #axes[1].set_xlim(0,11/rs)
             axes[0].grid(True)
             axes[1].grid(True)
         else:
-            figure,axes=plt.subplots(2,1,sharex=True)
-            x = np.linspace(0,10,11).reshape(-1,1)
-            axes[0].stem(x,indata[0:11,0])
-            axes[0].set_ylim(0, 1.1);
-            axes[0].set_xlim((np.amin(x), np.amax(x)));
-            axes[0].set_ylabel('Input', **hfont,fontsize=18);
-            axes[0].grid(True)
-            axes[1].stem(x, duts[k].IOS.Members['Z'].Data[0+latency[k]:11+latency[k],0])
-            axes[1].set_ylim(0, 1.1);
-            axes[1].set_xlim((np.amin(x), np.amax(x)));
-            axes[1].set_ylabel('Output', **hfont,fontsize=18);
-            axes[1].set_xlabel('Sample (n)', **hfont,fontsize=18);
-            axes[1].grid(True)
-        titlestr = "Inverter model %s" %(duts[k].model) 
+            pass
+        titlestr = "Filter model %s" %(duts[k].model) 
         plt.suptitle(titlestr,fontsize=20);
         plt.grid(True);
         printstr="./inv_%s.eps" %(duts[k].model)

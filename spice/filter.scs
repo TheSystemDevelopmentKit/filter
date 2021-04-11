@@ -1,0 +1,5 @@
+subckt filter gnd inniputti outtiputti
+C0 (outtiputti gnd) capacitor c=Capval
+R0 (inniputti outtiputti) resistor r=rval
+ends filter
+
